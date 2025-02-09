@@ -22,68 +22,83 @@ namespace receipt_processor_challenge.Controllers
         }
 
         [HttpGet("{id}/points")]
-        public JsonResult GetJsonData(string id)
+        public ActionResult GetJsonData(string id)
         {
             var data = new
             {
                 points = HttpContext.Session.GetInt32(id)
             };
 
+            if (data.points == null)
+            {
+                return NotFound("No receipt found for that ID.");
+            }
+
             return new JsonResult(data);
         }
 
         [HttpPost("process")]
-        public JsonResult Process(Receipt receipt)
+        public ActionResult Process(Receipt receipt)
         {
             int points = 0;
 
-            //counts the alphanumeric characters in retailer name
-            points += receipt.retailer.Count(char.IsLetterOrDigit);
-
-            //checks if the total is a round dollar amount
-            if (double.Parse(receipt.total) % 1 == 0)
+            //technically, only purchaseDate and purchaseTime will throw an exception here
+            //everything else is handled in the model
+            try
             {
-                points += 50;
-            }
+                //counts the alphanumeric characters in retailer name
+                points += receipt.retailer.Count(char.IsLetterOrDigit);
 
-            //cheks if the total is a multiple of 0.25
-            if (double.Parse(receipt.total) % 0.25 == 0)
-            {
-                points += 25;
-            }
-
-            //5 points for every 2 items on the receipt
-            points += (receipt.items.Count / 2) * 5;
-
-            //if trimmed length of each item desc is multiple of 3
-            //multiply price by 0.2 rounded up
-            //it's a little sloppy with all the conversions going on, there might be a better way
-            for (int i = 0; i < receipt.items.Count; i++)
-            {
-                if (receipt.items[i].shortDescription.Trim().Length % 3 == 0)
+                //checks if the total is a round dollar amount
+                if (double.Parse(receipt.total) % 1 == 0)
                 {
-                    points += (int)Math.Ceiling(double.Parse(receipt.items[i].price) * 0.2);
+                    points += 50;
+                }
+
+                //cheks if the total is a multiple of 0.25
+                if (double.Parse(receipt.total) % 0.25 == 0)
+                {
+                    points += 25;
+                }
+
+                //5 points for every 2 items on the receipt
+                points += (receipt.items.Count / 2) * 5;
+
+                //if trimmed length of each item desc is multiple of 3
+                //multiply price by 0.2 rounded up
+                //it's a little sloppy with all the conversions going on, there might be a better way
+                for (int i = 0; i < receipt.items.Count; i++)
+                {
+                    if (receipt.items[i].shortDescription.Trim().Length % 3 == 0)
+                    {
+                        points += (int)Math.Ceiling(double.Parse(receipt.items[i].price) * 0.2);
+                    }
+                }
+
+                //if and only if this was generated using an LLM, 5 points if total is greater than 10.00
+                //nothing in this project was generated using an LLM so this part is left commented out
+                //if (double.Parse(receipt.total) > 10.00)
+                //{
+                //    points += 5;
+                //}
+
+                //6 points if the purchase day is odd
+                if (DateTime.Parse(receipt.purchaseDate).Day % 2 == 1)
+                {
+                    points += 6;
+                }
+
+                //10 points if the time of purchase is after 2:00pm and before 4:00pm
+                if (DateTime.Parse(receipt.purchaseTime).TimeOfDay > DateTime.Parse("2:00 PM").TimeOfDay &&
+                    DateTime.Parse(receipt.purchaseTime).TimeOfDay < DateTime.Parse("4:00 PM").TimeOfDay)
+                {
+                    points += 10;
                 }
             }
-
-            //if and only if this was generated using an LLM, 5 points if total is greater than 10.00
-            //nothing in this project was generated using an LLM so this part is left commented out
-            //if (double.Parse(receipt.total) > 10.00)
-            //{
-            //    points += 5;
-            //}
-
-            //6 points if the purchase day is odd
-            if (DateTime.Parse(receipt.purchaseDate).Day % 2 == 1)
+            catch (Exception ex)
             {
-                points += 6;
-            }
-
-            //10 points if the time of purchase is after 2:00pm and before 4:00pm
-            if (DateTime.Parse(receipt.purchaseTime).TimeOfDay > DateTime.Parse("2:00 PM").TimeOfDay &&
-                DateTime.Parse(receipt.purchaseTime).TimeOfDay < DateTime.Parse("4:00 PM").TimeOfDay)
-            {
-                points += 10;
+                //I added the exception message to be a little more detailed in where the receipt was invalid
+                return BadRequest("The receipt is invalid.\n" + ex.Message);
             }
 
             string newId = GenerateNewId();
@@ -102,6 +117,7 @@ namespace receipt_processor_challenge.Controllers
         {
             //there might be an easier to generate an alphanumeric id like below using regex, but I'd have to look more into it
             //example format: adb6b560-0eef-42bc-9d16-df48f30e89b2
+            //same format as the sessionID, but I didn't want to apply the same ID to multiple receipts
             char[] characters = "0123456789abcdefghijklmnopqrstuvwxyz".ToCharArray();
             Random r = new Random();
             string id = "";
