@@ -55,7 +55,7 @@ namespace receipt_processor_challenge.Controllers
                     points += 50;
                 }
 
-                //cheks if the total is a multiple of 0.25
+                //checks if the total is a multiple of 0.25
                 if (double.Parse(receipt.total) % 0.25 == 0)
                 {
                     points += 25;
