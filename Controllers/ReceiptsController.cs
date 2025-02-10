@@ -98,6 +98,7 @@ namespace receipt_processor_challenge.Controllers
             catch (Exception ex)
             {
                 //I added the exception message to be a little more detailed in where the receipt was invalid
+                //This should only trigger when purchaseDate or purchaseTime match the regex, but are out of bounds
                 return BadRequest("The receipt is invalid.\n" + ex.Message);
             }
 
